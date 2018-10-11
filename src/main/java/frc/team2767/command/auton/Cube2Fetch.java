@@ -6,9 +6,16 @@ import static frc.team2767.command.auton.PowerUpGameFeature.SWITCH;
 import com.moandjiezana.toml.Toml;
 import edu.wpi.first.wpilibj.command.Command;
 import edu.wpi.first.wpilibj.command.CommandGroup;
+import edu.wpi.first.wpilibj.command.WaitCommand;
 import frc.team2767.Robot;
+import frc.team2767.command.intake.DisableLidar;
 import frc.team2767.command.intake.EnableLidar;
+import frc.team2767.command.intake.IntakeLoad;
+import frc.team2767.command.intake.StartIntakeHold;
 import frc.team2767.command.sequence.Stow;
+import frc.team2767.command.shoulder.ShoulderPosition;
+import frc.team2767.command.vision.LightsOff;
+import frc.team2767.command.vision.LightsOn;
 import frc.team2767.subsystem.DriveSubsystem;
 import frc.team2767.subsystem.IntakeSensorsSubsystem;
 import frc.team2767.subsystem.IntakeSubsystem;
@@ -28,6 +35,11 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
     SETTINGS.put(new Scenario(StartPosition.LEFT, SCALE, OwnedSide.RIGHT), "L_SC_O_C2F");
     SETTINGS.put(new Scenario(StartPosition.RIGHT, SCALE, OwnedSide.LEFT), "R_SC_O_C2F");
     SETTINGS.put(new Scenario(StartPosition.RIGHT, SCALE, OwnedSide.RIGHT), "R_SC_S_C2F");
+
+    SETTINGS.put(new Scenario(StartPosition.LEFT, SWITCH, OwnedSide.LEFT), "L_SW_S_C2F");
+    SETTINGS.put(new Scenario(StartPosition.LEFT, SWITCH, OwnedSide.RIGHT), "L_SW_O_C2F");
+    SETTINGS.put(new Scenario(StartPosition.RIGHT, SWITCH, OwnedSide.RIGHT), "R_SW_S_C2F");
+    SETTINGS.put(new Scenario(StartPosition.RIGHT, SWITCH, OwnedSide.LEFT), "R_SW_O_C2F");
   }
 
   private final DriveSubsystem driveSubsystem = Robot.INJECTOR.driveSubsystem();
@@ -50,9 +62,11 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
   private double kRightDirection;
   private int kRightDistance;
   private double kRightAzimuth;
+  private double kLeftDriveMultiplier;
+  private double kRightDriveMultiplier;
 
   Cube2Fetch(StartPosition startPosition, PowerUpGameFeature startFeature) {
-    if (startFeature == SWITCH) return; // don't currently get second cube after switch cube 1
+    // if (startFeature == SWITCH) return; // don't currently get second cube after switch cube 1
     this.startFeature = startFeature;
     String settings = SETTINGS.get(new Scenario(startPosition, startFeature, OwnedSide.LEFT));
     Toml toml = Robot.INJECTOR.settings().getAutonSettings(settings);
@@ -61,6 +75,7 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
     kLeftDirection = toml.getDouble("direction");
     kLeftDistance = toml.getLong("distance").intValue();
     kLeftAzimuth = toml.getDouble("azimuth");
+    kLeftDriveMultiplier = toml.getDouble("multiplier");
 
     settings = SETTINGS.get(new Scenario(startPosition, startFeature, OwnedSide.RIGHT));
     toml = Robot.INJECTOR.settings().getAutonSettings(settings);
@@ -69,6 +84,7 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
     kRightDirection = toml.getDouble("direction");
     kRightDistance = toml.getLong("distance").intValue();
     kRightAzimuth = toml.getDouble("azimuth");
+    kRightDriveMultiplier = toml.getDouble("multiplier");
   }
 
   @Override
@@ -83,6 +99,15 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
         SETTINGS.get(
             new Scenario(startPosition, startFeature, startFeature == SWITCH ? nearSwitch : scale));
 
+    if (settings == null) {
+      logger.debug(
+          "startPosition = {}, startFeature = {}, nearSwitch = {}, scale = {}",
+          startPosition,
+          startFeature,
+          nearSwitch,
+          scale);
+    }
+
     addSequential(
         new CommandGroup() {
           {
@@ -91,9 +116,10 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
                     ? new MotionDrive(kLeftDirection, kLeftDistance, kLeftAzimuth)
                     : new MotionDrive(kRightDirection, kRightDistance, kRightAzimuth));
             addParallel(new EnableLidar());
+            addParallel(new LightsOn());
             addSequential(new Stow(), 1.2);
-            // addSequential(new WaitCommand(0.25));
-            // addSequential(new IntakeLoad(IntakeLoad.Position.GROUND), 0.25);
+            addSequential(new WaitCommand(0.25));
+            addSequential(new IntakeLoad(IntakeLoad.Position.GROUND), 0.25);
           }
 
           @Override
@@ -101,36 +127,38 @@ public final class Cube2Fetch extends CommandGroup implements OwnedSidesSettable
             logger.trace("PathCommand || (Stow → Wait → IntakeLoad) ENDED");
           }
         });
-    /*
-      // addSequential(azimuthToCube);
 
-      driveToCube =
-          isLeft
-              ? new DriveToCube(kLeftDriveStopDistance, isLeft, isCross)
-              : new DriveToCube(kRightDriveStopDistance, isLeft, isCross);
+    addSequential(azimuthToCube);
 
-      addSequential(
-          new CommandGroup() {
-            {
-              addParallel(
-                  new IntakeInCubeTwo(isLeft ? kLeftIntakeStopDistance : kRightIntakeStopDistance),
-                  3.0);
-              addParallel(driveToCube);
-            }
+    driveToCube =
+        isLeft
+            ? new DriveToCube(kLeftDriveStopDistance, isLeft, isCross)
+            : new DriveToCube(kRightDriveStopDistance, isLeft, isCross);
 
-            @Override
-            protected void end() {
-              logger.trace("IntakeInCubeTwo || DriveToCube ENDED");
-            }
-          });
+    addSequential(
+        new CommandGroup() {
+          {
+            addParallel(
+                new IntakeInCubeTwo(isLeft ? kLeftIntakeStopDistance : kRightIntakeStopDistance),
+                3.0);
+            addParallel(driveToCube);
+          }
 
-      addParallel(new DisableLidar());
-      addSequential(new StartIntakeHold());
+          @Override
+          protected void end() {
+            logger.trace("IntakeInCubeTwo || DriveToCube ENDED");
+          }
+        });
 
-      addParallel(new DriveFromCube(driveToCube));
-      addSequential(new WaitCommand(0.25));
-      addSequential(new ShoulderPosition(ShoulderPosition.Position.TIGHT_STOW));
-    */ }
+    addParallel(new DisableLidar());
+    addParallel(new LightsOff());
+    addSequential(new StartIntakeHold());
+
+    addParallel(
+        new DriveFromCube(driveToCube, isLeft ? kLeftDriveMultiplier : kRightDriveMultiplier));
+    addSequential(new WaitCommand(0.25));
+    addSequential(new ShoulderPosition(ShoulderPosition.Position.TIGHT_STOW));
+  }
 
   @Override
   public String toString() {

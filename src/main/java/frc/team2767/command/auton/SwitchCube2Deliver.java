@@ -1,6 +1,7 @@
 package frc.team2767.command.auton;
 
 import static frc.team2767.command.auton.PowerUpGameFeature.SCALE;
+import static frc.team2767.command.auton.PowerUpGameFeature.SWITCH;
 
 import com.moandjiezana.toml.Toml;
 import edu.wpi.first.wpilibj.command.CommandGroup;
@@ -25,6 +26,11 @@ public class SwitchCube2Deliver extends CommandGroup implements OwnedSidesSettab
     SETTINGS.put(new Scenario(StartPosition.LEFT, SCALE, MatchData.OwnedSide.RIGHT), "L_SW_O_C2D");
     SETTINGS.put(new Scenario(StartPosition.RIGHT, SCALE, MatchData.OwnedSide.LEFT), "R_SW_O_C2D");
     SETTINGS.put(new Scenario(StartPosition.RIGHT, SCALE, MatchData.OwnedSide.RIGHT), "R_SW_S_C2D");
+    SETTINGS.put(new Scenario(StartPosition.LEFT, SWITCH, MatchData.OwnedSide.LEFT), "L_SW_S_C2D");
+    SETTINGS.put(new Scenario(StartPosition.LEFT, SWITCH, MatchData.OwnedSide.RIGHT), "L_SW_O_C2D");
+    SETTINGS.put(
+        new Scenario(StartPosition.RIGHT, SWITCH, MatchData.OwnedSide.RIGHT), "R_SW_S_C2D");
+    SETTINGS.put(new Scenario(StartPosition.RIGHT, SWITCH, MatchData.OwnedSide.LEFT), "R_SW_O_C2D");
   }
 
   private final double kLeftDirection;
@@ -62,12 +68,19 @@ public class SwitchCube2Deliver extends CommandGroup implements OwnedSidesSettab
     logger.debug(
         "RDirec = {}, RDist = {}, RAzi = {}", kRightDirection, kRightDistance, kRightAzimuth);
 
-    addParallel(
-        isLeft
-            ? new MotionDrive(kLeftDirection, kLeftDistance, kLeftAzimuth)
-            : new MotionDrive(kRightDirection, kRightDistance, kRightAzimuth));
-    addSequential(new ShoulderPosition(ShoulderPosition.Position.STOW));
-    addSequential(new IntakeEject(IntakeSubsystem.Mode.SWITCH_EJECT));
+    addSequential(
+        new CommandGroup() {
+          {
+            addParallel(
+                isLeft
+                    ? new MotionDrive(kLeftDirection, kLeftDistance, kLeftAzimuth)
+                    : new MotionDrive(kRightDirection, kRightDistance, kRightAzimuth),
+                3.0);
+            addSequential(new ShoulderPosition(ShoulderPosition.Position.STOW));
+          }
+        });
+
+    addSequential(new IntakeEject(IntakeSubsystem.Mode.SWITCH_EJECT, 0.8));
   }
 
   @Override

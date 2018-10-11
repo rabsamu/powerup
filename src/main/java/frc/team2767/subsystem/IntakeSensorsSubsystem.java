@@ -35,7 +35,7 @@ public class IntakeSensorsSubsystem extends Subsystem implements Graphable, Item
   private static final Logger logger = LoggerFactory.getLogger(IntakeSensorsSubsystem.class);
 
   private static final int CANIFIER_ID = 32;
-  private static final double LIDAR_READ_PERIOD = 20.0 / 1000.0;
+  private static final int LIDAR_READ_PERIOD_MS = 10;
   private static final int NUM_TAPS = 2;
 
   private final double kLidarSlope;
@@ -56,6 +56,7 @@ public class IntakeSensorsSubsystem extends Subsystem implements Graphable, Item
     Toml toml = settings.getTable("POWERUP.INTAKE");
     kLidarSlope = toml.getDouble("lidarSlope") / 10.0;
     kLidarOffset = toml.getDouble("lidarOffset");
+
     lidarFilter =
         LinearDigitalFilter.movingAverage(
             new PIDSource() {
@@ -74,6 +75,7 @@ public class IntakeSensorsSubsystem extends Subsystem implements Graphable, Item
               }
             },
             NUM_TAPS);
+
     enableLidar(false);
   }
 
@@ -82,7 +84,9 @@ public class IntakeSensorsSubsystem extends Subsystem implements Graphable, Item
 
   @Override
   public void periodic() {
-    if (lidarEnabled && lidarTimer.hasPeriodPassed(LIDAR_READ_PERIOD)) lidarFilter.pidGet();
+    if (lidarEnabled && lidarTimer.hasPeriodPassed(LIDAR_READ_PERIOD_MS / 1000.0)) {
+      lidarFilter.pidGet();
+    }
   }
 
   public void enableLidar(boolean enable) {
@@ -90,7 +94,8 @@ public class IntakeSensorsSubsystem extends Subsystem implements Graphable, Item
     if (enable) {
       logger.info("enabling lidar");
       canifier.setGeneralOutput(GeneralPin.LIMF, true, true);
-      canifier.setStatusFramePeriod(CANifierStatusFrame.Status_5_PwmInputs2, 20, 0);
+      canifier.setStatusFramePeriod(
+          CANifierStatusFrame.Status_5_PwmInputs2, LIDAR_READ_PERIOD_MS, 0);
       lidarTimer = new Timer();
       lidarTimer.start();
     } else {

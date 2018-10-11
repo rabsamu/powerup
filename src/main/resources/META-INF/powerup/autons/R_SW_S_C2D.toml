@@ -1,9 +1,8 @@
-# NOT USED
+# Deliver Second Cube to Switch
 
-#path = "R_SW_S_C2D"
 direction = -150.0
-distance = 100_000
-azimuth = -70.0
+distance = 180_000
+azimuth = -49.0
 
 #drive1 = -0.1
 #drive2 = 0.1
